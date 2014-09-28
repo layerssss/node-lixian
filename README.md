@@ -75,6 +75,7 @@ lixian --username "USER@SERVER.com" --password "pAS5w0rD" --url "http://xxx.com/
 * `lixian.delete_task({delete: '1234567'}, function(e){ });`
 * `lixian.add_url({url: 'http://xxx.com/xx.tar.gz'}, function(e){ });`
 * `lixian.add_torrent({torrent: 'http://xxx.com/xx.tar.gz'}, function(e){ });`
+* `lixian.vcodeHandler = function(verification_code_image_data_url, cb){ cb(null/* error */, 'aFe4'/* 4-chars verification code */); };`
 
 # 故事
 
