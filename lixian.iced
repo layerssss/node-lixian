@@ -79,18 +79,17 @@ module.exports = class Lixian extends Phantom
           name: task.taskname
           files: []
           id: task.id
-        await @page.evaluate (data)->
+        await @execute task, (task, done)->
             window.__folder_data__ = null
             $.getJSON INTERFACE_URL+"/fill_bt_list?callback=?",
-              tid: data.task.id
-              infoid: data.task.cid
+              tid: task.id
+              infoid: task.cid
               g_net: G_section
               p: 1
               uid: G_USERID
               interfrom: G_PAGE, (data)->
-                window.__folder_data__ = data
-          , defer(), task: task
-        await @waitForExpression (-> window.__folder_data__), null, defer e, folderdata
+                done null, data
+          , defer e, folderdata
         return cb e if e
         for item in folderdata.Result[task.id]
           folder.files.push
