@@ -1,0 +1,10 @@
+#!/usr/bin/env node
+require('iced-coffee-script').register();
+var cli = require('../cli');
+(new cli()).run(function(e){
+  if(e){
+    console.error(e.message);
+    return process.exit(1);
+  }
+  process.exit(1);
+});
