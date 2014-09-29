@@ -15,6 +15,7 @@ module.exports = class Lixian extends Phantom
     return cb new Error '`username` argument must be provided!' unless options.username
     return cb new Error '`password` argument must be provided!' unless options.password
 
+    await @ph.clearCookies defer()
     await @page.open 'http://lixian.xunlei.com', defer status
     await @waitForSelector '#u', defer e
     return cb e if e

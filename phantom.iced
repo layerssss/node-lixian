@@ -6,6 +6,7 @@ module.exports = class Phantom
     return cb null if @inited
     await phantom.create options.switches..., defer @ph
     await @ph.createPage defer @page
+    @inited = true
     cb null
   waitForExpression: (expression, data, cb)->
     time = @timeout
