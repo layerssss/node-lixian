@@ -95,8 +95,9 @@ module.exports = class Lixian extends Phantom
           folder.files.push
             name: item.title
             url: item.downurl
-
-    cb null, tasks
+    await @execute ((done)-> done null, document.cookie), defer e, cookie
+    return cb e if e
+    cb null, tasks: tasks, cookie: cookie
   add_url: (options, cb)->
     return cb new Error 'you must login first' unless @logon
     return cb new Error '`url` argument must be provided!' unless options.url
