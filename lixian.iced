@@ -8,7 +8,8 @@ module.exports = class Lixian extends Phantom
     options.switches.push "--web-security=no"
     await super options, defer e
     return cb e if e
-    await @page. set 'viewportSize', width: 1440, height: 1024, defer()
+    await @page.set 'viewportSize', width: 1440, height: 1024, defer()
+    await @page.setHeaders 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2062.124 Safari/537.36', defer()
     return cb null
 
   login: (options, cb)->
