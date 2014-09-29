@@ -204,7 +204,7 @@ module.exports = class Lixian extends Phantom
             .value = data.vcode
         , defer(), vcode: vcode
       await @page.evaluate submitFun, defer(), data
-      await @watchOutForVcode submitFun, defer e
+      await @watchOutForVcode submitFun, data, defer e
       return cb e if e
 
     return cb null
