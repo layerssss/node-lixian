@@ -69,13 +69,14 @@ module.exports = class Lixian extends Phantom
     for task in taskdata.info.tasks
       if task.tasktype == 1
         tasks.push
-          type: 'file'
           name: task.taskname
-          url: task.lixian_url
           id: task.id
+          files: [
+            name: task.taskname
+            url: task.lixian_url
+          ]
       if task.tasktype == 0
         tasks.push folder =
-          type:'folder'
           name: task.taskname
           files: []
           id: task.id
