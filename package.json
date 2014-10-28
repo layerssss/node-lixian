@@ -1,6 +1,6 @@
 {
   "name": "node-lixian",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "非官方迅雷离线下载服务 api for nodejs",
   "main": "index.js",
   "scripts": {

@@ -48,6 +48,11 @@ module.exports = class Lixian extends Phantom
       , password: options.password, defer e
     return cb e if e
     await @waitForSelector '#rowbox_list', defer e
+    return cb new Error 'Login failed!' if e
+
+    await @execute (done)->
+        done null, window.G_USERID
+      , defer e, @G_USERID
     return cb e if e
 
     @logon = true
@@ -55,16 +60,13 @@ module.exports = class Lixian extends Phantom
 
   list: (options, cb)->
     return cb new Error 'you must login first' unless @logon
-    await @execute (done)->
-        $.getJSON INTERFACE_URL + "/showtask_unfresh?callback=?",
-          type_id: 4
-          page: 1
-          tasknum: 30
-          t: (new Date()).toString()
-          p: 1
-          interfrom: 'task'
-          , (data)->
-            done null, data
+    await @jsonp "http://dynamic.cloud.vip.xunlei.com/interface/showtask_unfresh", "jsonp#{Date.now()}",
+      type_id: 4
+      page: 1
+      tasknum: 30
+      t: (new Date()).toString()
+      p: 1
+      interfrom: 'task'
       , defer e, taskdata
     return cb e if e
     tasks = []
@@ -82,19 +84,16 @@ module.exports = class Lixian extends Phantom
           name: task.taskname
           files: []
           id: task.id
-        await @execute task, (task, done)->
-            window.__folder_data__ = null
-            $.getJSON INTERFACE_URL+"/fill_bt_list?callback=?",
-              tid: task.id
-              infoid: task.cid
-              g_net: G_section
-              p: 1
-              uid: G_USERID
-              interfrom: G_PAGE, (data)->
-                done null, data
+        await @jsonp "http://dynamic.cloud.vip.xunlei.com/interface/fill_bt_list", 'fill_bt_list',
+          tid: task.id
+          infoid: task.cid
+          g_net: 1
+          p: 1
+          uid: @G_USERID
+          interfrom: 'task'
           , defer e, folderdata
         return cb e if e
-        for item in folderdata.Result[task.id]
+        for item in folderdata.Result.Record
           folder.files.push
             name: item.title
             url: item.downurl
@@ -211,6 +210,22 @@ module.exports = class Lixian extends Phantom
     
   vcodeHandler: (vcode_data, cb)->
     return cb new Error 'unhandled vcode'
+  jsonp: (url, callback_fn, params, cb)->
+    params.noCacheIE = Date.now()
+    params.callback = callback_fn
+    url += '?' unless url.match /\?/
+    url += '&' unless url.match /\&$/
+    url += "#{encodeURIComponent k}=#{encodeURIComponent v}&" for k, v of params
+    await @execute callback_fn: callback_fn, url: url, (data, done)->
+        window[data.callback_fn] = (o)-> done null, o
+        document.body.appendChild script = document.createElement 'script'
+        script.type = 'text/javascript'
+        script.src = data.url
+      , defer e, data
+    return cb e if e
+    return cb null, data
+
+
 
 
 
