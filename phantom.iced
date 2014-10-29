@@ -13,6 +13,11 @@ module.exports = class Phantom
     @enableDebug() if options.debug
     cb null
   enableDebug: ->
+    
+  dump: (cb)->
+    await @page.render '.phantom.debug.png', defer()
+    return cb null
+
   waitForExpression: (expression, data, cb)->
     time = @timeout
     while true

@@ -37,21 +37,26 @@ module.exports = class Lixian extends Phantom
         done null
       , defer e
     return cb e if e
-        
-    await setTimeout defer(), 2000
+    
     await @page.evaluate (data)->
         document.querySelector '#button_submit4reg'
           .onclick()
       , defer()
+
     await @watchOutForVcode (data)->
         document.querySelector '#p_show'
           .value = data.password
         document.querySelector '#button_submit4reg'
           .onclick()
-      , password: options.password, defer e
+      , password: options.password, defer(e), (done)->
+        msg = document.querySelector '#loginform_msg p'
+        if msg?.offsetParent
+          done new Error msg.innerText
+        else
+          done null
     return cb e if e
     await @waitForSelector '#rowbox_list', defer e
-    return cb new Error 'Login failed!' if e
+    return cb new Error "Login failed! (#{e.message})" if e
 
     await @execute (done)->
         done null, window.G_USERID
@@ -182,8 +187,10 @@ module.exports = class Lixian extends Phantom
     return cb e if e
     cb null
 
-  watchOutForVcode: (submitFun, data, cb)->
+  watchOutForVcode: (submitFun, data, cb, checkFun=((done)->done null))->
     await setTimeout defer(), 2000
+    await @execute checkFun, defer e
+    return cb e if e
     await @page.evaluate ->
         window.__vcode_img__ = document.querySelector 'img[src*="http://verify"][src*=".xunlei.com/image"]'
         window.__vcode_img__?.offsetParent

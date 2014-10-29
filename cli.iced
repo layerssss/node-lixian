@@ -49,8 +49,8 @@ module.exports = class Cli
       await lixian[arg] commander, defer e, data1, data2
       clearInterval timer
       if e
-        await lixian.page.render 'node-lixian.error.png', defer() if commander.debug
-        return cb e 
+        await lixian.dump defer() if commander.debug
+        return cb e
       console.log "done."
       console.log JSON.stringify data1, null, '  ' if data1?
       console.log JSON.stringify data2, null, '  ' if data2?
