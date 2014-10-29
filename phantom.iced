@@ -3,8 +3,11 @@ module.exports = class Phantom
   constructor: ->
     @timeout ?= 5000
   init: (options, cb)->
+    options.weakref ?= true
     return cb null if @inited
-    await phantom.create options.switches..., defer @ph
+    await phantom.create options.switches..., defer(@ph), 
+      dnodeOps: 
+        weak: options.weakref
     await @ph.createPage defer @page
     @inited = true
     cb null
