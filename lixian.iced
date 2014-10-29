@@ -86,6 +86,7 @@ module.exports = class Lixian extends Phantom
           files: [
             name: task.taskname
             url: task.lixian_url
+            size: Number task.file_size
           ]
       if task.tasktype == 0
         tasks.push folder =
@@ -105,6 +106,7 @@ module.exports = class Lixian extends Phantom
           folder.files.push
             name: item.title
             url: item.downurl
+            size: Number item.filesize
     await @execute ((done)-> done null, document.cookie), defer e, cookie
     return cb e if e
     cb null, tasks: tasks, cookie: cookie
