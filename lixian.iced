@@ -22,7 +22,9 @@ module.exports = class Lixian extends Phantom
     return cb e if e
     await @waitForSelector '#p_show', defer e
     return cb e if e
-    await @page.evaluate (data)->
+    await @waitForExpression (-> window.G_STATUS), {}, defer e
+    return cb e if e
+    await @execute username: options.username, password: options.password, (data, done)->
         window.restime = null
         document.querySelector '#u'
           .onfocus()
@@ -32,9 +34,10 @@ module.exports = class Lixian extends Phantom
           .onfocus()
         document.querySelector '#p_show'
           .value = data.password
-      , defer(),
-        username: options.username
-        password: options.password
+        done null
+      , defer e
+    return cb e if e
+        
     await setTimeout defer(), 2000
     await @page.evaluate (data)->
         document.querySelector '#button_submit4reg'

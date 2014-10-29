@@ -10,7 +10,9 @@ module.exports = class Phantom
         weak: options.weakref
     await @ph.createPage defer @page
     @inited = true
+    @enableDebug() if options.debug
     cb null
+  enableDebug: ->
   waitForExpression: (expression, data, cb)->
     time = @timeout
     while true

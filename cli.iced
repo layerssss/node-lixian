@@ -33,7 +33,7 @@ module.exports = class Cli
       .option '-d --delete <id>', 'id of task to be deleted'
       .option '-U --url <url>', 'url'
       .option '-t --torrent <path>', 'torrent path'
-      .option '-d --debug', 'add debug infomation'
+      .option '-D --debug', 'add debug infomation'
       .option '-V --novcode', 'do not handle verification code'
     commander.parse process.argv
     lixian = new Lixian()
