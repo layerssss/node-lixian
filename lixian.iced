@@ -66,8 +66,20 @@ module.exports = class Lixian extends Phantom
     @logon = true
     return cb null
 
+  reload: (cb)->
+    await @page.open 'http://lixian.xunlei.com', defer status
+    await @waitForSelector '#rowbox_list', defer e
+    await @waitForExpression (-> window.G_STATUS == '4'), null, defer e
+    await setTimeout defer(), 100
+    return cb new Error "Login failed! (#{e.message})" if e
+    cb null
+
   list: (options, cb)->
     return cb new Error 'you must login first' unless @logon
+
+    await @reload defer e
+    return cb e if e
+
     await @jsonp "http://dynamic.cloud.vip.xunlei.com/interface/showtask_unfresh", "jsonp#{Date.now()}",
       type_id: 4
       page: 1
@@ -116,6 +128,8 @@ module.exports = class Lixian extends Phantom
     return cb new Error 'you must login first' unless @logon
     return cb new Error '`url` argument must be provided!' unless options.url
 
+    await @reload defer e
+    return cb e if e
 
     await @page.evaluate (data)->
         add_task_new 0
@@ -144,6 +158,9 @@ module.exports = class Lixian extends Phantom
   add_torrent: (options, cb)->
     return cb new Error 'you must login first!' unless @logon
     return cb new Error '`torrent` argument must be provided!' unless options.torrent
+
+    await @reload defer e
+    return cb e if e
 
     await @page.evaluate (data)->
         add_task_new 1
@@ -179,6 +196,9 @@ module.exports = class Lixian extends Phantom
   delete_task: (options, cb)->
     return cb new Error 'you must login first' unless @logon
     return cb new Error '`delete` argument must be provided!' unless options.delete
+    
+    await @reload defer e
+    return cb e if e
 
     await @execute options.delete, (id, done)->
         $.post INTERFACE_URL + "/task_delete?callback=&type=0",
