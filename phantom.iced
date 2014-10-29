@@ -1,7 +1,7 @@
 phantom = require 'phantom'
 module.exports = class Phantom
   constructor: ->
-    @timeout ?= 5000
+    @timeout ?= 10000
   init: (options, cb)->
     options.weakref ?= true
     return cb null if @inited
