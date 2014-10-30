@@ -68,6 +68,7 @@ module.exports = class Lixian extends Phantom
 
   reload: (cb)->
     await @page.open 'http://lixian.xunlei.com', defer status
+    await setTimeout defer(), 100
     await @waitForSelector '#rowbox_list', defer e
     await @waitForExpression (-> window.G_STATUS == '4'), null, defer e
     await setTimeout defer(), 100
