@@ -81,17 +81,23 @@ module.exports = class Lixian extends Phantom
     await @reload defer e
     return cb e if e
 
-    await @jsonp "http://dynamic.cloud.vip.xunlei.com/interface/showtask_unfresh", "jsonp#{Date.now()}",
-      type_id: 4
-      page: 1
-      tasknum: 30
-      t: (new Date()).toString()
-      p: 1
-      interfrom: 'task'
-      , defer e, taskdata
-    return cb e if e
+    page = 1
+    taskdata = []
+    while true
+      await @jsonp "http://dynamic.cloud.vip.xunlei.com/interface/showtask_unfresh", "jsonp#{Date.now()}",
+        type_id: 4
+        page: page
+        tasknum: 30
+        t: (new Date()).toString()
+        p: page
+        interfrom: 'task'
+        , defer e, data
+      return cb e if e
+      break unless data.info.tasks.length
+      taskdata.push task for task in data.info.tasks
+      page += 1
     tasks = []
-    for task in taskdata.info.tasks
+    for task in taskdata
       if task.tasktype == 1
         tasks.push
           name: task.taskname
@@ -107,16 +113,24 @@ module.exports = class Lixian extends Phantom
           name: task.taskname
           files: []
           id: task.id
-        await @jsonp "http://dynamic.cloud.vip.xunlei.com/interface/fill_bt_list", 'fill_bt_list',
-          tid: task.id
-          infoid: task.cid
-          g_net: 1
-          p: 1
-          uid: @G_USERID
-          interfrom: 'task'
-          , defer e, folderdata
-        return cb e if e
-        for item in folderdata.Result.Record
+
+        folderdata = []
+        page = 1
+        while true
+          await @jsonp "http://dynamic.cloud.vip.xunlei.com/interface/fill_bt_list", 'fill_bt_list',
+            tid: task.id
+            infoid: task.cid
+            g_net: 1
+            p: page
+            uid: @G_USERID
+            interfrom: 'task'
+            , defer e, data
+          return cb e if e
+          break unless data.Result.Record.length
+          folderdata.push file for file in data.Result.Record
+          page += 1
+
+        for item in folderdata
           folder.files.push
             name: item.title
             url: item.downurl
