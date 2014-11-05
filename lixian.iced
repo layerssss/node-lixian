@@ -220,6 +220,7 @@ module.exports = class Lixian
       return cb e if e
       break unless data.info.tasks.length
       taskdata.push task for task in data.info.tasks
+      @_jar.setCookie "gdriveid=#{data['info']['user']['cookie']}; expire=#{new Date(Number(Date.now()) + 3600000 * 24).toUTCString()}; path=/; domain=.vip.xunlei.com;", 'http://dynamic.cloud.vip.xunlei.com/interface/showtask_unfresh'
       page += 1
     tasks = []
     for task in taskdata
@@ -420,12 +421,14 @@ module.exports = class Lixian
     cb null
 
   delete_task: (options, cb)->
-    return cb new Error '`delete` 参数必须提供!' unless options.delete
+    return cb new Error '`delete` 参数必须提供!' unless id = options.delete
     
     await @_reload defer e
     return cb e if e
 
     return cb new Error '必须重新登录' unless @logon
+
+    timespan = Date.now() / 1000
 
     await @_jsonp "http://dynamic.cloud.vip.xunlei.com/interface/task_delete", "jsonp#{Date.now()}",
       type: 2
