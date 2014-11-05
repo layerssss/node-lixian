@@ -180,6 +180,11 @@ module.exports = class Lixian
   _reload: (cb)->
     await @_cookie 'userid', defer e, @_userid
     return cb if e
+
+    unless @_userid
+      @logon = false
+      return cb null
+
     timespan = Date.now() / 1000
     await @_get "http://dynamic.cloud.vip.xunlei.com/user_task",
       userid: @_userid
