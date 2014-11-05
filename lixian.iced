@@ -1,97 +1,217 @@
-Phantom = require './phantom'
+request = require 'request'
+vm = require 'vm'
+fs = require 'fs'
+path = require 'path'
+md5 = require 'MD5'
+jarson = require 'jarson'
 
-module.exports = class Lixian extends Phantom
-
+module.exports = class Lixian 
+  headers: 
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2062.124 Safari/537.36'
+    'Accept': 'text/html'
+    'Accept-Language': 'zh-CN,zh;q=0.8,en-US;q=0.2,en;q=0.2'
 
   init: (options, cb)->
-    options.switches ?= []
-    options.switches.push "--web-security=no"
-    await super options, defer e
+    @_debug = options.debug
+    @_jar = request.jar()
+    if options.cookie
+      @_jar._jar = jarson.fromJSON options.cookie
+
+    await @_reload defer e
     return cb e if e
-    await @page.set 'viewportSize', width: 1440, height: 1024, defer()
-    await @page.setHeaders 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2062.124 Safari/537.36', defer()
+
     return cb null
 
-  login: (options, cb)->
-    return cb new Error '`username` argument must be provided!' unless options.username
-    return cb new Error '`password` argument must be provided!' unless options.password
+  _get_binary: (url, qs, cb)->
+    url += "?"
+    url += "#{encodeURIComponent k}=#{encodeURIComponent v}&" for k, v of qs
+    req = 
+      method: 'GET'
+      url: url
+    await @_request req, defer e, body
+    return cb e if e
 
-    await @ph.clearCookies defer()
-    await @page.open 'http://lixian.xunlei.com', defer status
-    await @waitForSelector '#u', defer e
+    return cb null, body
+
+  _get: (url, qs, cb)->
+    await @_get_binary url, qs, defer e, body
     return cb e if e
-    await @waitForSelector '#p_show', defer e
+
+    body = body.toString 'utf8'
+    @debug 'response.body', body
+    return cb null, body
+
+  debug: (prefix, data)->
+    return unless @_debug
+    data = JSON.stringify data, null, ' ' unless data?.constructor is String
+    if (lines = data.split '\n').length > 30
+      console.log "#{prefix}> #{line}" for line in lines[..30]
+      console.log "#{prefix}>   ... total: #{lines.length} lines ..."
+    else
+      console.log data.replace /^/mg, "#{prefix}> "
+
+  _post: (url, qs, data, cb)->
+    url += "?"
+    url += "#{encodeURIComponent k}=#{encodeURIComponent v}&" for k, v of qs
+    req = 
+      method: 'POST'
+      url: url
+      encoding: 'utf8'
+    multipart = false
+    for key, field of data
+      if !field?
+        delete data[key] 
+      else
+        if field.constructor is Object
+          multipart = true 
+          if field.value.constructor is Buffer
+            field.value.toJSON = -> "Buffer(#{@length})"
+        
+    if multipart
+      req.formData = data
+    else
+      req.form = data
+    await @_request req, defer e, body
+    @debug 'response.body', body
     return cb e if e
-    await @waitForExpression (-> window.G_STATUS), {}, defer e
+
+    return cb null, body
+
+  _request: (req, cb)->
+    req.encoding ?= null
+    req.headers ?= @headers
+
+    @debug 'request', req
+
+    req.jar ?= @_jar
+    
+    req = request req, (e, res, body)=>
+      @debug 'response.headers', res.headers
+      cb e, body
+    @debug 'request.headers', req.headers
+
+
+  _md5: (string)-> md5 string 
+
+  _cookie: (key, cb)->
+    await @_jar._jar.getCookies 'http://lixian.vip.xunlei.com/task.html', defer e, cookies
     return cb e if e
-    await @execute username: options.username, password: options.password, (data, done)->
-        window.restime = null
-        document.querySelector '#u'
-          .onfocus()
-        document.querySelector '#u'
-          .value = data.username
-        document.querySelector '#p_show_err'
-          .onfocus()
-        document.querySelector '#p_show'
-          .value = data.password
-        done null
-      , defer e
+
+    for cookie in cookies
+      if cookie.key == key
+        return cb null, cookie.value
+
+    return cb null, null
+
+  _jsonp: (url, callback_fn, qs, data, cb)->
+    qs.callback = callback_fn
+    if data?
+      await @_post url, qs, data, defer e, data
+      return cb e if e
+    else
+      await @_get url, qs, defer e, data
+      return cb e if e
+    if alert = data.match /alert\(\'([^\']+\')/
+      return cb new Error alert[1]
+
+    sandbox = {
+      data: null
+    }
+    vm.runInNewContext "var #{callback_fn} = function(){ data = arguments; }; #{data}", sandbox, 'node-lixian.jsonp.vm'
+    data = sandbox.data
+    return cb new Error "发生未知错误" unless data?.length?
+    cb null, data...
+
+  dumpCookie: ->
+    jarson.toJSON @_jar._jar
+
+  login: (options, cb)->
+    return cb new Error '`username` 参数必须提供!' unless options.username
+    return cb new Error '`password` 或者 `hashed_password` 参数必须提供!' unless options.password || options.hashed_password
+
+    await @_reload defer e
+    return cb e if e
+
+    @logon = false
+    timespan = Date.now() / 1000
+    await @_get "http://login.xunlei.com/check",
+      u: @_userid
+      cachetime: timespan
+    , defer e, body
+    return cb e if e
+
+    await @_cookie 'check_result', defer e, cookie
     return cb e if e
     
-    await @page.evaluate (data)->
-        document.querySelector '#button_submit4reg'
-          .onclick()
-      , defer()
+    vcode = cookie[2..]
 
-    await @watchOutForVcode (data)->
-        document.querySelector '#p_show'
-          .value = data.password
-        document.querySelector '#button_submit4reg'
-          .onclick()
-      , password: options.password, defer(e), (done)->
-        msg = document.querySelector '#loginform_msg p'
-        if msg?.offsetParent
-          done new Error msg.innerText
-        else
-          done null
-    return cb e if e
-    await @waitForSelector '#rowbox_list', defer e
-    return cb new Error "Login failed! (#{e.message})" if e
+    unless vcode
+      await @_get_binary "http://verify2.xunlei.com/image", cachetime: timespan, defer e, body
+      return cb e if e
+      await @vcodeHandler body, defer e, vcode
+      return cb e if e
 
-    await @execute (done)->
-        done null, window.G_USERID
-      , defer e, @G_USERID
+    await @_post "http://login.xunlei.com/sec2login/", {},
+      u: options.username, 
+      p: @_md5 "#{options.hashed_password || @_md5 @_md5 options.password}#{vcode.toUpperCase()}"
+      login_enable: 1
+      login_hour: 720
+      verifycode: vcode
+      business_type: 108
+    , defer e, body
     return cb e if e
+
+    await @_cookie 'userid', defer e, @_userid
+    return cb e if e
+    return cb new Error '登录失败' unless @_userid
+
+    await @_get "http://dynamic.lixian.vip.xunlei.com/login",
+      cachetime: timespan
+      from: 0
+    , defer e, body
+    return cb e if e
+    return cb new Error '登录失败' unless body.length >= 512
+
+    
 
     @logon = true
     return cb null
 
-  reload: (cb)->
-    await @page.open 'http://lixian.xunlei.com', defer status
-    await setTimeout defer(), 100
-    await @waitForSelector '#rowbox_list', defer e
-    await @waitForExpression (-> window.G_STATUS == '4'), null, defer e
-    await setTimeout defer(), 100
-    return cb new Error "Login failed! (#{e.message})" if e
+  _reload: (cb)->
+    await @_cookie 'userid', defer e, @_userid
+    return cb if e
+    timespan = Date.now() / 1000
+    await @_get "http://dynamic.cloud.vip.xunlei.com/user_task",
+      userid: @_userid
+      st: 4
+      t: timespan
+    , defer e, body
+    return cb e if e
+
+    @logon = body.length >= 512
+
+    await @_cookie 'userid', defer e, @_userid
+    return cb if e
+
     cb null
 
   list: (options, cb)->
-    return cb new Error 'you must login first' unless @logon
-
-    await @reload defer e
+    await @_reload defer e
     return cb e if e
+
+    return cb new Error '必须重新登录' unless @logon
 
     page = 1
     taskdata = []
     while true
-      await @jsonp "http://dynamic.cloud.vip.xunlei.com/interface/showtask_unfresh", "jsonp#{Date.now()}",
+      await @_jsonp "http://dynamic.cloud.vip.xunlei.com/interface/showtask_unfresh", "jsonp#{Date.now()}",
         type_id: 4
         page: page
         tasknum: 30
         t: (new Date()).toString()
         p: page
         interfrom: 'task'
-        , defer e, data
+        , null, defer e, data
       return cb e if e
       break unless data.info.tasks.length
       taskdata.push task for task in data.info.tasks
@@ -117,14 +237,14 @@ module.exports = class Lixian extends Phantom
         folderdata = []
         page = 1
         while true
-          await @jsonp "http://dynamic.cloud.vip.xunlei.com/interface/fill_bt_list", 'fill_bt_list',
+          await @_jsonp "http://dynamic.cloud.vip.xunlei.com/interface/fill_bt_list", 'fill_bt_list',
             tid: task.id
             infoid: task.cid
             g_net: 1
             p: page
-            uid: @G_USERID
+            uid: @_userid
             interfrom: 'task'
-            , defer e, data
+            , null, defer e, data
           return cb e if e
           break unless data.Result.Record.length
           folderdata.push file for file in data.Result.Record
@@ -136,143 +256,185 @@ module.exports = class Lixian extends Phantom
             url: item.downurl
             size: Number item.filesize
             md5: item.verify
-    await @execute ((done)-> done null, document.cookie), defer e, cookie
+    cookie = @_jar.getCookieString 'http://dynamic.cloud.vip.xunlei.com/'
+
     return cb e if e
     cb null, tasks: tasks, cookie: cookie
   add_url: (options, cb)->
-    return cb new Error 'you must login first' unless @logon
-    return cb new Error '`url` argument must be provided!' unless options.url
+    return cb new Error '`url` 参数必须提供!' unless options.url
 
-    await @reload defer e
+    await @_reload defer e
     return cb e if e
 
-    await @page.evaluate (data)->
-        add_task_new 0
-        document.querySelector '#task_url'
-          .value = data.url
-      , defer(), url: options.url
-    await @waitForSelector '#down_but:not([disabled])', defer e
-    return cb e if e
-    await @page.evaluate ->
-        document.querySelector '#down_but'
-          .onclick()
-      , defer()
-    await @watchOutForVcode ->
-        document.querySelector '#down_but'
-          .onclick()
-      , null, defer()
-    return cb e if e
-    await @waitForExpression ->
-        document.querySelector '#add_task_panel'
-          .style
-          .display == 'none'
-      , null, defer e
-    return cb e if e
+    return cb new Error '必须重新登录' unless @logon
+    
+
+    timespan = Date.now() / 1000
+    random = Math.floor Math.random() * 1000
+
+    if options.url.match /^magnet\:/
+      await @_jsonp "http://dynamic.cloud.vip.xunlei.com/interface/url_query", 'queryUrl',
+        u: options.url
+        random: timespan
+      , null, defer e, ret_code, cid, tsize, btname, d, filename_arr, filesize_arr, format_arr, index_arr
+      return cb e if e
+      return new Error '任务信息查找失败' unless 1 == Number ret_code
+
+      await @_commit_task "http://dynamic.cloud.vip.xunlei.com/interface/bt_task_commit", 
+        callback: "jsonp#{Date.now()}",
+        t: timespan
+      , 
+        uid: @_userid
+        btname: btname
+        cid: cid
+        goldbean: 0
+        silverbean: 0
+        tsize: tsize
+        findex: index_arr.map((s)-> "#{s}_").join ''
+        size: filesize_arr.map((s)-> "#{s}_").join ''
+        o_taskid: 0
+        o_page: 'task'
+        class_id: 0
+        interfrom: 'task'
+      , (data)->
+        Number data.progress
+      , defer e, data
+      return cb e if e
+
+    else
+      await @_jsonp "http://dynamic.cloud.vip.xunlei.com/interface/task_check", "queryCid",
+        url: options.url
+        random: random
+        tcache: timespan
+      , null, defer e, cid, gcid, size_required, d, filename, goldbean_need, silverbean_need, is_full
+      return cb e if e
+
+      task_type = 0
+      if options.url.match /^ed2k\:/
+        task_type = 2
+
+      await @_commit_task 'http://dynamic.cloud.vip.xunlei.com/interface/task_commit', 'ret_task',
+        uid: @_userid
+        cid: cid
+        gcid: gcid
+        size: size_required
+        goldbean: goldbean_need
+        silverbean: silverbean_need
+        t: filename
+        url: options.url
+        type: task_type
+        o_page: 'task'
+        o_taskid: '0'
+      , null, (ret_code)->
+        Number ret_code
+      , defer e
+      return cb e if e
+
     cb null
 
+  _commit_task: (url, callback_fn, qs, data, fn_ret_code, cb)->
+    timespan = Date.now() / 1000
+
+    await @_jsonp url, callback_fn, qs, data, defer e, data...
+    return cb e if e
+
+    ret_code = fn_ret_code data...
+
+    return cb null, data... unless ret_code in [-12, -11]
+
+    await @_get_binary "http://verify2.xunlei.com/image", cachetime: timespan, defer e, body
+    return cb e if e
+    await @vcodeHandler body, defer e, vcode
+    return cb e if e 
+
+    data['verify_code'] = vcode
+
+    await @_jsonp url, callback_fn, qs, data, defer e, data...
+    return cb e if e
+
+    ret_code = fn_ret_code data...
+
+    return cb new Error '验证码错误' if ret_code in [-12, -11]
+    return cb null, data...
+
   add_torrent: (options, cb)->
-    return cb new Error 'you must login first!' unless @logon
-    return cb new Error '`torrent` argument must be provided!' unless options.torrent
+    return cb new Error '`torrent` 参数必须提供!' unless options.torrent
 
-    await @reload defer e
+    await @_reload defer e
     return cb e if e
 
-    await @page.evaluate (data)->
-        add_task_new 1
-      , defer()
-    @page.uploadFile '#filepath', options.torrent
+    return cb new Error '必须重新登录!' unless @logon
 
-    await @waitForExpression ->
-        select_all = document.querySelector '#bt_edit_input_all'
-        return false unless select_all.offsetParent
-        select_all.setAttribute('checked', 'checked')
-        select_all.onclick()
-        return true
-      , null, defer()
-    await @waitForSelector '#down_but:not([disabled])', defer e
+    timespan = Date.now() / 1000
+
+    await fs.readFile options.torrent, defer e, torrent
     return cb e if e
-    await @page.evaluate ->
-        document.querySelector '#down_but'
-          .onclick()
-      , defer()
-    await @watchOutForVcode ->
-        document.querySelector '#down_but'
-          .onclick()
-      , null, defer()
+
+    await @_post "http://dynamic.cloud.vip.xunlei.com/interface/torrent_upload", 
+      random: timespan
+      interfrom: 'task'
+    , 
+      filepath: 
+        value: torrent
+        options: 
+          filename: path.basename options.torrent
+          contentType: 'application/octet-stream'
+    , defer e, data
     return cb e if e
-    await @waitForExpression ->
-        document.querySelector '#add_task_panel'
-          .style
-          .display == 'none'
-      , null, defer e
+
+    sandbox = {
+      document: {}
+      error: null
+      btResult: null
+    }
+    data = data.replace /\<\/?script\>/g, ''
+    vm.runInNewContext "var alert = function(){ error = arguments[0]; };#{data}", sandbox
+    return cb new Error String sandbox.error if sandbox.error
+    return cb new Error "发生未知错误" unless data = sandbox.btResult
+
+    await @_commit_task "http://dynamic.cloud.vip.xunlei.com/interface/bt_task_commit", "jsonp#{Date.now()}",
+      t: timespan
+    , 
+      uid: @_userid
+      btname: data.ftitle
+      cid: data.infoid
+      goldbean: 0
+      silverbean: 0
+      tsize: data.btsize
+      findex: data.filelist.map((s)-> "#{s.id}_").join ''
+      size: data.filelist.map((s)-> "#{s.subsize}_").join ''
+      o_taskid: 0
+      o_page: 'task'
+      class_id: 0
+      interfrom: 'task'
+    , (data)->
+        Number data.progress
+    , defer e, data
     return cb e if e
+
     cb null
 
   delete_task: (options, cb)->
-    return cb new Error 'you must login first' unless @logon
-    return cb new Error '`delete` argument must be provided!' unless options.delete
+    return cb new Error '`delete` 参数必须提供!' unless options.delete
     
-    await @reload defer e
+    await @_reload defer e
     return cb e if e
 
-    await @execute options.delete, (id, done)->
-        $.post INTERFACE_URL + "/task_delete?callback=&type=0",
-          taskids: id
-          databases: 0
-          interfrom: 'task'
-          , ->
-            return done null
-      , defer e
+    return cb new Error '必须重新登录' unless @logon
+
+    await @_jsonp "http://dynamic.cloud.vip.xunlei.com/interface/task_delete", "jsonp#{Date.now()}",
+      type: 2
+      noCacheIE: timespan
+    ,
+      taskids: id
+      databases: 0
+      interfrom: 'task'
+    , defer e, data
     return cb e if e
     cb null
-
-  watchOutForVcode: (submitFun, data, cb, checkFun=((done)->done null))->
-    await setTimeout defer(), 2000
-    await @execute checkFun, defer e
-    return cb e if e
-    await @page.evaluate ->
-        window.__vcode_img__ = document.querySelector 'img[src*="http://verify"][src*=".xunlei.com/image"]'
-        window.__vcode_img__?.offsetParent
-      , defer(vcode_exists)
-    return cb e if e
-    if vcode_exists
-      await @waitForExpression ->
-          return null unless window.__vcode_img__.naturalWidth && window.__vcode_img__.naturalHeight
-          canvas = document.createElement 'canvas'
-          canvas.width = window.__vcode_img__.naturalWidth
-          canvas.height = window.__vcode_img__.naturalHeight
-          canvas.getContext('2d').drawImage window.__vcode_img__, 0, 0
-          return canvas.toDataURL 'image/jpeg', 0.5
-        , null, defer e, vcode_data
-      return cb e if e
-      await @vcodeHandler vcode_data, defer e, vcode
-      return cb e if e
-      await @page.evaluate (data)->
-          document.querySelector '#verifycode'
-            .value = data.vcode
-        , defer(), vcode: vcode
-      await @page.evaluate submitFun, defer(), data
-      await @watchOutForVcode submitFun, data, defer e
-      return cb e if e
-
-    return cb null
     
   vcodeHandler: (vcode_data, cb)->
     return cb new Error 'unhandled vcode'
-  jsonp: (url, callback_fn, params, cb)->
-    params.noCacheIE = Date.now()
-    params.callback = callback_fn
-    url += '?' unless url.match /\?/
-    url += '&' unless url.match /\&$/
-    url += "#{encodeURIComponent k}=#{encodeURIComponent v}&" for k, v of params
-    await @execute callback_fn: callback_fn, url: url, (data, done)->
-        window[data.callback_fn] = (o)-> done null, o
-        document.body.appendChild script = document.createElement 'script'
-        script.type = 'text/javascript'
-        script.src = data.url
-      , defer e, data
-    return cb e if e
-    return cb null, data
 
 
 

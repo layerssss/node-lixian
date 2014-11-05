@@ -6,5 +6,5 @@ var cli = require('../cli');
     console.error(e.message);
     return process.exit(1);
   }
-  process.exit(1);
+  process.exit(0);
 });
