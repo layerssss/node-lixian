@@ -86,7 +86,7 @@ module.exports = class Lixian
     req.jar ?= @_jar
     
     req = request req, (e, res, body)=>
-      @debug 'response.headers', res.headers
+      @debug 'response.headers', res.headers if res?.headers?
       cb e, body
     @debug 'request.headers', req.headers
 
