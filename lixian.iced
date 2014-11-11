@@ -146,7 +146,7 @@ module.exports = class Lixian
     vcode = cookie[2..]
 
     unless vcode
-      await @_get_binary "http://verify2.xunlei.com/image", cachetime: timespan, defer e, body
+      await @_get_binary "http://verify2.xunlei.com/image", t: 'MVA', cachetime: timespan, defer e, body
       return cb e if e
       await @vcodeHandler body, defer e, vcode
       return cb e if e
