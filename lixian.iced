@@ -4,8 +4,11 @@ fs = require 'fs'
 path = require 'path'
 md5 = require 'MD5'
 jarson = require 'jarson'
+{
+  EventEmitter
+} = require 'events'
 
-module.exports = class Lixian 
+module.exports = class Lixian extends EventEmitter
   headers: 
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2062.124 Safari/537.36'
     'Accept': 'text/html'
@@ -16,6 +19,15 @@ module.exports = class Lixian
     @_jar = request.jar()
     if options.cookie
       @_jar._jar = jarson.fromJSON options.cookie
+
+    if @_debug
+      @on 'debug', (prefix, data)=>
+        data = JSON.stringify data, null, ' ' unless data?.constructor is String
+        if (lines = data.split '\n').length > 30
+          console.log "#{prefix}> #{line}" for line in lines[..30]
+          console.log "#{prefix}>   ... total: #{lines.length} lines ..."
+        else
+          console.log data.replace /^/mg, "#{prefix}> "
 
     await @_reload defer e
     return cb e if e
@@ -42,13 +54,7 @@ module.exports = class Lixian
     return cb null, body
 
   debug: (prefix, data)->
-    return unless @_debug
-    data = JSON.stringify data, null, ' ' unless data?.constructor is String
-    if (lines = data.split '\n').length > 30
-      console.log "#{prefix}> #{line}" for line in lines[..30]
-      console.log "#{prefix}>   ... total: #{lines.length} lines ..."
-    else
-      console.log data.replace /^/mg, "#{prefix}> "
+    @emit 'debug', prefix, data
 
   _post: (url, qs, data, cb)->
     url += "?"
