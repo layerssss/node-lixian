@@ -289,8 +289,7 @@ module.exports = class Lixian
       return cb e if e
       return new Error '任务信息查找失败' unless 1 == Number ret_code
 
-      await @_commit_task "http://dynamic.cloud.vip.xunlei.com/interface/bt_task_commit", 
-        callback: "jsonp#{Date.now()}",
+      await @_commit_task "http://dynamic.cloud.vip.xunlei.com/interface/bt_task_commit", "jsonp#{Date.now()}",
         t: timespan
       , 
         uid: @_userid
