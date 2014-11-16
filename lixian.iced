@@ -117,7 +117,10 @@ module.exports = class Lixian
     sandbox = {
       data: null
     }
-    vm.runInNewContext "var #{callback_fn} = function(){ data = arguments; }; #{data}", sandbox, 'node-lixian.jsonp.vm'
+    try
+      vm.runInNewContext "var #{callback_fn} = function(){ data = arguments; }; #{data}", sandbox, 'node-lixian.jsonp.vm'
+    catch e
+      return cb e
     data = sandbox.data
     return cb new Error "发生未知错误" unless data?.length?
     cb null, data...
@@ -394,7 +397,10 @@ module.exports = class Lixian
       btResult: null
     }
     data = data.replace /\<\/?script\>/g, ''
-    vm.runInNewContext "var alert = function(){ error = arguments[0]; };#{data}", sandbox
+    try
+      vm.runInNewContext "var alert = function(){ error = arguments[0]; };#{data}", sandbox
+    catch e
+      return cb e 
     return cb new Error String sandbox.error if sandbox.error
     return cb new Error "发生未知错误" unless data = sandbox.btResult
 
