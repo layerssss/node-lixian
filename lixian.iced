@@ -92,7 +92,9 @@ module.exports = class Lixian extends EventEmitter
     req.jar ?= @_jar
     
     req = request req, (e, res, body)=>
+      @debug 'response.statusCode', res.statusCode if res?.statusCode?
       @debug 'response.headers', res.headers if res?.headers?
+      @debug 'response.error', e.stack if e
       cb e, body
     @debug 'request.headers', req.headers
 
