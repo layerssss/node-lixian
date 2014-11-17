@@ -24,6 +24,6 @@
     "commander": "^2.3.0",
     "iced-coffee-script": "^1.7.1-g",
     "jarson": "^1.0.0",
-    "request": "^2.47.0"
+    "request": "^2.48.0"
   }
 }

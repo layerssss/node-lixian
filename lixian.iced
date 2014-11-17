@@ -11,7 +11,7 @@ jarson = require 'jarson'
 module.exports = class Lixian extends EventEmitter
   headers: 
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2062.124 Safari/537.36'
-    'Accept': 'text/html'
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
     'Accept-Language': 'zh-CN,zh;q=0.8,en-US;q=0.2,en;q=0.2'
 
   init: (options, cb)->
@@ -23,6 +23,7 @@ module.exports = class Lixian extends EventEmitter
     if @_debug
       @on 'debug', (prefix, data)=>
         data = JSON.stringify data, null, ' ' unless data?.constructor is String
+        data ?= 'undefined'
         if (lines = data.split '\n').length > 30
           console.log "#{prefix}> #{line}" for line in lines[..30]
           console.log "#{prefix}>   ... total: #{lines.length} lines ..."
@@ -35,8 +36,9 @@ module.exports = class Lixian extends EventEmitter
     return cb null
 
   _get_binary: (url, qs, cb)->
-    url += "?"
-    url += "#{encodeURIComponent k}=#{encodeURIComponent v}&" for k, v of qs
+    if Object.keys(qs).length
+      url += "?"
+      url += "#{encodeURIComponent k}=#{encodeURIComponent v}&" for k, v of qs
     req = 
       method: 'GET'
       url: url
@@ -56,13 +58,13 @@ module.exports = class Lixian extends EventEmitter
   debug: (prefix, data)->
     @emit 'debug', prefix, data
 
-  _post: (url, qs, data, cb)->
-    url += "?"
-    url += "#{encodeURIComponent k}=#{encodeURIComponent v}&" for k, v of qs
-    req = 
-      method: 'POST'
-      url: url
-      encoding: 'utf8'
+  _post: (url, qs, data, cb, opts={})->
+    if Object.keys(qs).length
+      url += "?"
+      url += "#{encodeURIComponent k}=#{encodeURIComponent v}&" for k, v of qs
+    opts.method ?= 'POST'
+    opts.url ?= url
+    opts.encoding ?= 'utf8'
     multipart = false
     for key, field of data
       if !field?
@@ -74,27 +76,39 @@ module.exports = class Lixian extends EventEmitter
             field.value.toJSON = -> "Buffer(#{@length})"
         
     if multipart
-      req.formData = data
+      opts.formData = data
     else
-      req.form = data
-    await @_request req, defer e, body
+      datastring = []
+      for k, v of data
+        datastring.push k: k, v: v
+      datastring = datastring.map ({k, v})->
+        "#{k}=#{encodeURIComponent v}"
+      .join '&'
+      opts.body = new Buffer datastring, 'utf8'
+      opts.body.toJSON = -> "Buffer(#{datastring})"
+      opts.headers ?= {}
+      opts.headers['Content-Type'] = 'application/x-www-form-urlencoded'
+      opts.headers['Content-Length'] = opts.body.length
+    await @_request opts, defer e, body
     @debug 'response.body', body
     return cb e if e
 
     return cb null, body
 
-  _request: (req, cb)->
-    req.encoding ?= null
-    req.headers ?= @headers
+  _request: (opts, cb)->
+    opts.encoding ?= null
+    opts.headers ?= {}
+    opts.headers[k] ?= v for k, v of @headers
+    opts.forever = true
 
-    @debug 'request', req
+    @debug 'request', opts
 
-    req.jar ?= @_jar
+    opts.jar ?= @_jar
     
-    req = request req, (e, res, body)=>
+    req = request opts, (e, res, body)=>
       @debug 'response.statusCode', res.statusCode if res?.statusCode?
       @debug 'response.headers', res.headers if res?.headers?
-      @debug 'response.error', e.stack if e
+      @debug 'response.error', e.message if e
       cb e, body
     @debug 'request.headers', req.headers
 
@@ -146,13 +160,15 @@ module.exports = class Lixian extends EventEmitter
     @logon = false
     timespan = Date.now() / 1000
     await @_get "http://login.xunlei.com/check",
-      u: @_userid
+      u: options.username
       cachetime: timespan
     , defer e, body
     return cb e if e
 
     await @_cookie 'check_result', defer e, cookie
     return cb e if e
+
+    @debug 'login.check_result', cookie
     
     vcode = cookie[2..]
 
@@ -162,14 +178,22 @@ module.exports = class Lixian extends EventEmitter
       await @vcodeHandler body, defer e, vcode
       return cb e if e
 
+    await @_get 'http://vip.xunlei.com/domain.html', {}, defer e, data
+    return cb e if e
+
     await @_post "http://login.xunlei.com/sec2login/", {},
       u: options.username, 
       p: @_md5 "#{options.hashed_password || @_md5 @_md5 options.password}#{vcode.toUpperCase()}"
-      login_enable: 1
-      login_hour: 720
+      login_enable: '1'
+      login_hour: '720'
       verifycode: vcode
-      business_type: 108
-    , defer e, body
+      business_type: '108'
+    , defer(e, body), 
+      headers: 
+        'Referer': 'http://lixian.vip.xunlei.com/task.html'
+        'Origin': 'http://lixian.vip.xunlei.com'
+        'Cache-Control': 'max-age=0'
+        'Host': 'login.xunlei.com'
     return cb e if e
 
     await @_cookie 'userid', defer e, @_userid
