@@ -99,7 +99,6 @@ module.exports = class Lixian extends EventEmitter
     opts.encoding ?= null
     opts.headers ?= {}
     opts.headers[k] ?= v for k, v of @headers
-    opts.forever = true
 
     @debug 'request', opts
 
